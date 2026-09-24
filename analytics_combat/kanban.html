@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprint Board - Analytics Combat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #121212; color: #e0e0e0; }
+        .kanban-col { min-height: 60vh; }
+        .task-card { cursor: grab; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .task-card:active { cursor: grabbing; transform: scale(0.98); }
+        .drag-over { background-color: rgba(255, 255, 255, 0.05); border-color: #3b82f6; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shadow-md shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl">🥋</span>
+            <h1 class="text-xl font-bold text-white tracking-tight">Analytics Combat <span class="text-gray-400 font-normal text-sm ml-2">Sprint Manager</span></h1>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm">
+                + Nueva Tarea
+            </button>
+            <button onclick="exportJSON()" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-md font-medium text-sm transition-colors border border-gray-600">
+                Exportar JSON
+            </button>
+            <label class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-md font-medium text-sm transition-colors border border-gray-600 cursor-pointer">
+                Importar JSON
+                <input type="file" id="importFile" accept=".json" class="hidden" onchange="importJSON(event)">
+            </label>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-x-auto p-6">
+        <div class="flex gap-6 h-full items-start min-w-[1000px]">
+            
+            <!-- Backlog -->
+            <div class="flex-1 flex flex-col bg-gray-900 rounded-xl border border-gray-800 max-h-full">
+                <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                    <h2 class="font-semibold text-gray-200">Backlog</h2>
+                    <span id="count-backlog" class="bg-gray-800 text-gray-400 text-xs px-2 py-1 rounded-full">0</span>
+                </div>
+                <div id="col-backlog" class="kanban-col p-3 flex-1 overflow-y-auto space-y-3" ondragover="allowDrop(event)" ondrop="drop(event, 'backlog')" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <!-- En Progreso -->
+            <div class="flex-1 flex flex-col bg-gray-900 rounded-xl border border-gray-800 max-h-full">
+                <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                    <h2 class="font-semibold text-blue-400">En Progreso</h2>
+                    <span id="count-inprogress" class="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded-full">0</span>
+                </div>
+                <div id="col-inprogress" class="kanban-col p-3 flex-1 overflow-y-auto space-y-3" ondragover="allowDrop(event)" ondrop="drop(event, 'inprogress')" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <!-- Revisión -->
+            <div class="flex-1 flex flex-col bg-gray-900 rounded-xl border border-gray-800 max-h-full">
+                <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                    <h2 class="font-semibold text-yellow-400">Revisión (Líder)</h2>
+                    <span id="count-review" class="bg-yellow-900 text-yellow-300 text-xs px-2 py-1 rounded-full">0</span>
+                </div>
+                <div id="col-review" class="kanban-col p-3 flex-1 overflow-y-auto space-y-3" ondragover="allowDrop(event)" ondrop="drop(event, 'review')" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <!-- Finalizado -->
+            <div class="flex-1 flex flex-col bg-gray-900 rounded-xl border border-gray-800 max-h-full">
+                <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                    <h2 class="font-semibold text-green-400">Finalizado</h2>
+                    <span id="count-done" class="bg-green-900 text-green-300 text-xs px-2 py-1 rounded-full">0</span>
+                </div>
+                <div id="col-done" class="kanban-col p-3 flex-1 overflow-y-auto space-y-3" ondragover="allowDrop(event)" ondrop="drop(event, 'done')" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 transition-opacity">
+        <div class="bg-gray-800 w-full max-w-md rounded-xl shadow-2xl border border-gray-700 overflow-hidden transform scale-95 transition-transform" id="modalContent">
+            <div class="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900">
+                <h3 class="text-lg font-bold text-white">Agregar Nueva Tarea</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <form id="taskForm" class="p-5 space-y-4" onsubmit="saveTask(event)">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Título de la Tarea</label>
+                    <input type="text" id="taskTitle" required class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Ej. Limpieza de datos de taekwondo">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Asignado a</label>
+                    <select id="taskAssignee" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                        <option value="Líder">Líder (Tú)</option>
+                        <option value="Asistente 1">Asistente 1</option>
+                        <option value="Asistente 2">Asistente 2</option>
+                        <option value="Asistente 3">Asistente 3</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Etiquetas (separadas por coma)</label>
+                    <input type="text" id="taskTags" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500" placeholder="Ej. Python, Datos, Urgente">
+                </div>
+                <div class="pt-4 flex justify-end gap-3 border-t border-gray-700 mt-6">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-sm font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-medium">Guardar Tarea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let tasks = [];
+        const STORAGE_KEY = 'analytics_combat_kanban';
+
+        // Initialize and load data
+        function init() {
+            const savedTasks = localStorage.getItem(STORAGE_KEY);
+            if (savedTasks) {
+                tasks = JSON.parse(savedTasks);
+            } else {
+                // Default starter tasks
+                tasks = [
+                    { id: 't1', title: 'Definir métricas de rendimiento', assignee: 'Líder', tags: 'Planificación', status: 'backlog' },
+                    { id: 't2', title: 'Recolectar dataset de prueba', assignee: 'Asistente 1', tags: 'Datos', status: 'backlog' }
+                ];
+                saveToLocalStorage();
+            }
+            renderBoard();
+        }
+
+        // Save state
+        function saveToLocalStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        }
+
+        // Render UI
+        function renderBoard() {
+            const columns = {
+                backlog: document.getElementById('col-backlog'),
+                inprogress: document.getElementById('col-inprogress'),
+                review: document.getElementById('col-review'),
+                done: document.getElementById('col-done')
+            };
+
+            const counts = { backlog: 0, inprogress: 0, review: 0, done: 0 };
+
+            // Clear columns
+            for (let col in columns) columns[col].innerHTML = '';
+
+            tasks.forEach(task => {
+                const col = columns[task.status];
+                if (!col) return;
+                
+                counts[task.status]++;
+                
+                const tagsHtml = task.tags ? task.tags.split(',').map(tag => 
+                    `<span class="px-2 py-0.5 bg-gray-700 text-gray-300 rounded text-xs border border-gray-600">${tag.trim()}</span>`
+                ).join('') : '';
+
+                let badgeColor = 'bg-gray-600';
+                if(task.assignee === 'Líder') badgeColor = 'bg-purple-600';
+                if(task.assignee === 'Asistente 1') badgeColor = 'bg-teal-600';
+                if(task.assignee === 'Asistente 2') badgeColor = 'bg-orange-600';
+                if(task.assignee === 'Asistente 3') badgeColor = 'bg-pink-600';
+
+                const card = document.createElement('div');
+                card.className = 'task-card bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-sm hover:border-gray-500';
+                card.draggable = true;
+                card.id = task.id;
+                card.ondragstart = (e) => drag(e);
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-sm font-medium text-white leading-snug">${task.title}</h3>
+                        <button onclick="deleteTask('${task.id}')" class="text-gray-500 hover:text-red-400 text-xs ml-2">&times;</button>
+                    </div>
+                    <div class="flex flex-wrap gap-1 mb-3">
+                        ${tagsHtml}
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-[10px] font-bold px-2 py-1 rounded-sm ${badgeColor} text-white">${task.assignee}</span>
+                    </div>
+                `;
+                col.appendChild(card);
+            });
+
+            // Update counters
+            for (let status in counts) {
+                document.getElementById(`count-${status}`).innerText = counts[status];
+            }
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("taskId", ev.target.id);
+            ev.target.style.opacity = '0.5';
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+
+        function dragEnter(ev) {
+            ev.preventDefault();
+            const col = ev.target.closest('.kanban-col');
+            if(col) col.classList.add('drag-over', 'border', 'border-blue-500', 'rounded-lg');
+        }
+
+        function dragLeave(ev) {
+            const col = ev.target.closest('.kanban-col');
+            if(col) col.classList.remove('drag-over', 'border', 'border-blue-500', 'rounded-lg');
+        }
+
+        function drop(ev, status) {
+            ev.preventDefault();
+            const col = document.getElementById(`col-${status}`);
+            col.classList.remove('drag-over', 'border', 'border-blue-500', 'rounded-lg');
+            
+            const taskId = ev.dataTransfer.getData("taskId");
+            const taskEl = document.getElementById(taskId);
+            if(taskEl) taskEl.style.opacity = '1';
+
+            const taskIndex = tasks.findIndex(t => t.id === taskId);
+            if (taskIndex > -1) {
+                tasks[taskIndex].status = status;
+                saveToLocalStorage();
+                renderBoard();
+            }
+        }
+
+        document.addEventListener('dragend', (e) => {
+            if(e.target.classList.contains('task-card')) e.target.style.opacity = '1';
+        });
+
+        function openModal() {
+            document.getElementById('taskModal').classList.remove('hidden');
+            document.getElementById('taskModal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('modalContent').classList.remove('scale-95');
+                document.getElementById('modalContent').classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            document.getElementById('modalContent').classList.remove('scale-100');
+            document.getElementById('modalContent').classList.add('scale-95');
+            setTimeout(() => {
+                document.getElementById('taskModal').classList.add('hidden');
+                document.getElementById('taskModal').classList.remove('flex');
+                document.getElementById('taskForm').reset();
+            }, 150);
+        }
+
+        function saveTask(e) {
+            e.preventDefault();
+            const newTask = {
+                id: 'task_' + Date.now(),
+                title: document.getElementById('taskTitle').value,
+                assignee: document.getElementById('taskAssignee').value,
+                tags: document.getElementById('taskTags').value,
+                status: 'backlog'
+            };
+            tasks.push(newTask);
+            saveToLocalStorage();
+            renderBoard();
+            closeModal();
+        }
+
+        function deleteTask(id) {
+            if(confirm('¿Eliminar esta tarea?')) {
+                tasks = tasks.filter(t => t.id !== id);
+                saveToLocalStorage();
+                renderBoard();
+            }
+        }
+
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `sprint_board_${new Date().toISOString().split('T')[0]}.json`);
+            dlAnchorElem.click();
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedTasks = JSON.parse(e.target.result);
+                    if (Array.isArray(importedTasks)) {
+                        tasks = importedTasks;
+                        saveToLocalStorage();
+                        renderBoard();
+                        alert('Tablero importado correctamente.');
+                    } else {
+                        alert('Formato de archivo inválido.');
+                    }
+                } catch (error) {
+                    alert('Error al leer el archivo JSON.');
+                }
+                // reset file input
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        // Run setup
+        init();
+    </script>
+</body>
+</html>
